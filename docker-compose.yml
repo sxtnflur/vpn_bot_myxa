@@ -1,0 +1,6 @@
+services:
+  bot:
+    container_name: vpnbot_myxa
+    build: .
+    env_file:
+      - .env

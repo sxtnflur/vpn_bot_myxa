@@ -1,0 +1,6 @@
+.env
+.idea
+.pytest_cache
+router_dump.go
+run.py
+__pycache__
