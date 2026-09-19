@@ -22,14 +22,23 @@ def _plural(n: int, forms: tuple[str, str, str]) -> str:
     return forms[2]
 
 
+def _to_naive_utc(date: datetime.datetime) -> datetime.datetime:
+    if date.tzinfo is not None:
+        return date.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return date
+
+
 def sub_end_to_string(date: datetime.datetime | None):
-    if date is None or date < datetime.datetime.utcnow():
+    if date is None:
+        return 'Истекла'
+    date = _to_naive_utc(date)
+    if date < datetime.datetime.utcnow():
         return 'Истекла'
     return f'{date.strftime(TIME_FORMAT)} ({datetime_to_td_string(date)})'
 
 
 def datetime_to_td_string(date: datetime.datetime):
-    td = max(date.replace(tzinfo=None) - datetime.datetime.utcnow(), datetime.timedelta(0))
+    td = max(_to_naive_utc(date) - datetime.datetime.utcnow(), datetime.timedelta(0))
     days = td.days
     hours, remainder = divmod(td.seconds, 3600)
     minutes = remainder // 60
