@@ -9,6 +9,21 @@ from logs import config_logger
 from presentation.bot.shared import loader
 
 
+def pytest_addoption(parser):
+    parser.addoption('--integration', action='store_true', default=False,
+                     help='Запускать тесты, которые ходят в реальные сервисы')
+
+
+def pytest_collection_modifyitems(config, items):
+    # Всё вне tests/unit работает с боевыми 3x-ui / RollyPay (создаёт клиентов и платежи)
+    skip = pytest.mark.skip(reason='integration: запуск с --integration')
+    for item in items:
+        if 'unit' not in item.path.parts:
+            item.add_marker(pytest.mark.integration)
+            if not config.getoption('--integration'):
+                item.add_marker(skip)
+
+
 @pytest.fixture(scope='session')
 def set_logs_debug():
     config_logger('DEBUG')
