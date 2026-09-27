@@ -4,31 +4,73 @@ from dataclasses import dataclass
 from typing_extensions import Literal
 
 
-
 @dataclass(frozen=True)
 class Inbound:
     id: int
     name: str
+    protocol: str
 
     @property
     def full_name(self):
         return f'#{self.id} {self.name}'
 
 
+@dataclass
+class Subscription:
+    email: str
+    telegram_id: int | None
+    expire_at: datetime.datetime
+    sub_id: str
+    rate_id: int | None
+    enable: bool
+    inbound_ids: list[int]
+    comment: str | None
+
+    def __post_init__(self) -> None:
+        if self.expire_at.tzinfo is not None:
+            self.expire_at = self.expire_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+    @classmethod
+    def from_client(
+            cls,
+            email: str,
+            telegram_id: int | None,
+            expire_at: datetime.datetime,
+            sub_id: str,
+            enable: bool,
+            inbound_ids: list[int],
+            comment: str | None = None,
+            group: str | None = None
+    ):
+        return cls(
+            email=email,
+            expire_at=expire_at,
+            sub_id=sub_id,
+            comment=comment,
+            enable=enable,
+            inbound_ids=inbound_ids,
+            rate_id=int(group) if group and group.isdigit() else None,
+            telegram_id=telegram_id
+        )
+
+
 @dataclass(frozen=True)
 class User:
     email: str
     expire_at: datetime.datetime
-    sub_id: int
+    sub_id: str
     active: bool
     load_up: int
     load_down: int
     total_gb: int
-    updated_at: datetime.datetime
     inbounds: list[Inbound]
     is_online: bool
-    traffic_reset: Literal['never']
+    links: 'SubscriptionLinks'
+    traffic_reset: Literal['never'] = 'never'
     comment: str | None = None
+
+
+ExpandedSubscription = User
 
 
 @dataclass(frozen=True)

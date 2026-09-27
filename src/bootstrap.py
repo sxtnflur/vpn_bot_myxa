@@ -1,11 +1,15 @@
 from aiogram import Bot
 from application.payments import PaymentsService
 from application.rates import RatesService
+from application.subscriptions.inbounds_service import InboundsService
+from application.subscriptions.subscription_by_email_service import SubscriptionByEmailService
 from config.settings import Settings
 from dependency_injector import providers, containers
 from application.subscriptions.service import SubscriptionsTgBotService
+from infra.cache.factory import create_cache_service
 from infra.client.session.aiohttp import AiohttpSession
-from infra.payments.factory import create_payments
+from infra.payments.factory import create_payments, PaymentKey
+from infra.rollypay.client import RollyPay
 from infra.xui_vpn import XUIVPN
 from presentation.bot.message_senders.payment import AiogramPaymentMessageSender
 
@@ -14,14 +18,8 @@ class Container(containers.DeclarativeContainer):
     settings = providers.Dependency(instance_of=Settings)
     bot = providers.Dependency(instance_of=Bot)
 
-    auth_headers = providers.Callable(
-        lambda api_key: {'Authorization': f'Bearer {api_key}'},
-        settings.provided.xui_api_key
-    )
-
     session = providers.Factory(
-        AiohttpSession,
-        headers=auth_headers
+        AiohttpSession
     )
 
     xui_vpn = providers.Singleton(
@@ -32,14 +30,35 @@ class Container(containers.DeclarativeContainer):
         session=session
     )
 
+    rates = providers.Singleton(
+        RatesService
+    )
+
+    inbounds = providers.Singleton(
+        InboundsService,
+        vpn_client=xui_vpn
+    )
+
     subs = providers.Singleton(
         SubscriptionsTgBotService,
-        vpn_client=xui_vpn
+        vpn_client=xui_vpn,
+        rates=rates,
+        inbounds_service=inbounds
+    )
+
+    rolly_pay = providers.Factory(
+        RollyPay,
+        api_key=settings.provided.rollypay_api_key,
+        base_url=settings.provided.rollypay_base_url,
+        secret_webhook=settings.provided.rollypay_secret_webhook,
+        session=session,
+        redirect_url=settings.provided.bot_url
     )
 
     payments_registry = providers.Callable(
         create_payments,
-        settings=settings
+        settings=settings,
+        rolly_pay=rolly_pay
     )
 
     payments_sender = providers.Singleton(
@@ -48,8 +67,10 @@ class Container(containers.DeclarativeContainer):
         tz=settings.provided.tz
     )
 
-    rates = providers.Singleton(
-        RatesService
+    cache = providers.Singleton(
+        create_cache_service,
+        'memory',
+        settings=settings.provided
     )
 
     payments = providers.Singleton(
@@ -58,7 +79,15 @@ class Container(containers.DeclarativeContainer):
         subscriptions_service=subs,
         sender=payments_sender,
         rates=rates,
-        fake=True
+        payment_key=PaymentKey.rollypay,
+        cache=cache,
+        fake=False
+    )
+
+    subs_by_email = providers.Singleton(
+        SubscriptionByEmailService,
+        vpn_client=xui_vpn,
+        inbounds_service=inbounds
     )
 
 

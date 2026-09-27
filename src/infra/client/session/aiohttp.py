@@ -3,9 +3,10 @@ from typing import Iterable, Any
 import asyncio
 import ssl
 import certifi
-from aiohttp import BasicAuth, ClientSession, TCPConnector
+from aiohttp import BasicAuth, ClientSession, TCPConnector, ClientResponse
 from aiohttp.hdrs import USER_AGENT
 from aiohttp.http import SERVER_SOFTWARE
+from application.errors import SessionError
 from infra.client.session.base import BaseSession
 
 
@@ -36,17 +37,36 @@ class AiohttpSession(BaseSession):
         }
         self._should_reset_connector = True  # flag determines connector state
 
+    async def _raise_exception(self, response: ClientResponse) -> None:
+        if not response.ok:
+            try:
+                json_details = await response.json()
+            except:
+                raise SessionError(
+                    status=response.status
+                )
+            else:
+                raise SessionError(
+                    status=response.status,
+                    json=json_details
+                )
+
     async def get(self, url: str, params: dict | None = None):
         session = await self.create_session()
-        print(f'{session.headers=}')
         response = await session.get(url, params=params)
-        response.raise_for_status()
+        await self._raise_exception(response)
         return await response.json()
 
-    async def post(self, url: str, data: dict | None = None, params: dict | None = None):
+    async def post(
+            self,
+            url: str,
+            data: dict | None = None,
+            params: dict | None = None,
+            headers: dict | None = None
+    ):
         session = await self.create_session()
-        response = await session.post(url, params=params, json=data)
-        response.raise_for_status()
+        response = await session.post(url, params=params, json=data, headers=headers)
+        await self._raise_exception(response)
         return await response.json()
 
     async def create_session(self) -> ClientSession:
@@ -54,11 +74,16 @@ class AiohttpSession(BaseSession):
             await self.close()
 
         if self._session is None or self._session.closed:
+            headers = {
+                USER_AGENT: SERVER_SOFTWARE,
+            }
+
+            if self._headers:
+                headers.update(**self._headers)
+
             self._session = ClientSession(
                 connector=self._connector_type(**self._connector_init),
-                headers={
-                    USER_AGENT: SERVER_SOFTWARE,
-                } | self._headers,
+                headers=headers,
             )
             self._should_reset_connector = False
 

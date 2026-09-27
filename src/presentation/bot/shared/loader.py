@@ -39,4 +39,4 @@ def register_dp(dp: Dispatcher, settings: Settings):
         dp.include_router(router)
 
     register_middlewares(dp, settings)
-    register_errors(dp)
+    register_errors(dp, settings.admin_log_chat_id)

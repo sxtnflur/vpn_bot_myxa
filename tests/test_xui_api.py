@@ -1,3 +1,7 @@
+import datetime
+
+import pytest
+
 from infra.xui_vpn.shared.schemas import ClientPayload
 from infra.xui_vpn.shared.xui_vpn import XUIVPN
 from py3xui.async_api import AsyncClientApi
@@ -39,15 +43,16 @@ async def test_get_clients_by_tg_id(xui_vpn: XUIVPN):
 async def test_add_client(xui_vpn: XUIVPN):
     await xui_vpn.clients.add(
         ClientPayload(
-            email=str(1304563494),
+            email='NewTema',
             tg_id=1304563494,
-            comment='test user'
-        )
+            comment='NEW Тема Бабрусько'
+        ),
+        inbound_ids=[1]
     )
 
 
 async def test_inbounds(xui_vpn):
-    result = await xui_vpn.inbounds.list_slim()
+    result = await xui_vpn.inbounds.options()
     for inbound in result:
         print(f'{inbound=}')
 
@@ -57,9 +62,15 @@ async def test_get_links(xui_vpn):
     print(f'{links=}')
 
 
-async def test_get_client(xui_vpn):
+async def test_get_client(xui_vpn, subs_service):
     res = await xui_vpn.clients.get_by_tg_id(1304563494)
     print(f'{res=}')
+    client = res[1].client
+    payload = client.to_client_payload()
+    payload.expiry_time = round(datetime.datetime.utcnow().timestamp())
+    await xui_vpn.clients.update(client.email, payload)
+    # await subs_service.set_existing_client_rate(client=res[0].client, rate_id=1)
+    # await subs_service.set_existing_client_rate(client=res[1].client, rate_id=2)
 
 
 async def test_get_traffic(xui_vpn, settings):
@@ -73,3 +84,19 @@ async def test_get_traffic(xui_vpn, settings):
         await xui_vpn.clients.traffic('AAZZHH')
     )
     # 53687091200
+
+
+@pytest.mark.skip
+async def test_delete_user(xui_vpn):
+    await xui_vpn.clients.delete(1304563494)
+
+
+@pytest.mark.skip
+async def test_update_all_users_groups(xui_vpn):
+    for client in await xui_vpn.clients.get_by_tg_id(1304563494):
+        payload = client.client.to_client_payload()
+        payload.group = '1'
+        await xui_vpn.clients.update(
+            email=client.client.email,
+            client=payload
+        )

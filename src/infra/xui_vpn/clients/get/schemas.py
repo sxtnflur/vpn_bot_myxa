@@ -1,7 +1,7 @@
 import datetime
 from uuid import UUID
 
-from infra.xui_vpn.shared.schemas import XuiApiResponse
+from infra.xui_vpn.shared.schemas import XuiApiResponse, ClientPayload
 from pydantic import Field, BaseModel
 
 
@@ -32,6 +32,22 @@ class Client(BaseModel):
     traffic_reset_day: int | None = Field(alias='trafficResetDay', default=None)
     created_at: datetime.datetime = Field(alias='createdAt')
     updated_at: datetime.datetime = Field(alias='updatedAt')
+
+    def to_client_payload(self):
+        return ClientPayload(
+            email=self.email,
+            sub_id=self.sub_id,
+            uuid=str(self.uuid),
+            total_gb=self.total_gb,
+            expiry_time=round(self.expiry_time.timestamp()),
+            tg_id=self.telegram_id,
+            limit_id=self.limit_ip,
+            enable=self.enable,
+            group=self.group,
+            comment=self.comment,
+            reset_day=self.reset_day,
+            reset_max=self.reset_max
+        )
 
 
 class GetClientObject(BaseModel):

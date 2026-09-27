@@ -2,7 +2,8 @@ from aiogram.types import BotCommand
 
 START = 'start'
 STATISTIC = 'profile'
-RATES = 'rates'
+PROFILE = STATISTIC
+RATES = 'buy'
 SUPPORT = 'support'
 
 
@@ -17,7 +18,7 @@ bot_commands = [
     ),
     BotCommand(
         command=RATES,
-        description='💵 Тарифы'
+        description='💵 Купить / Продлить'
     ),
     BotCommand(
         command=STATISTIC,

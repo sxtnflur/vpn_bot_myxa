@@ -1,6 +1,6 @@
 import logging
 
-from aiogram import Router
+from aiogram import Router, types
 from aiogram.filters import ExceptionTypeFilter
 from aiogram.types import Message, CallbackQuery, ErrorEvent
 
@@ -24,7 +24,7 @@ DEFAULT_ERROR_MESSAGE = 'Произошла непредвиденная оши�
                          f'в поддержку: /{commands.SUPPORT}'
 
 
-def register_errors(router: Router):
+def register_errors(router: Router, admin_logs_id: int):
     @router.error(ExceptionTypeFilter(NoSubError))
     async def no_sub_error(event: ErrorEvent):
         message = _get_message_from_error_event(event)
@@ -38,4 +38,10 @@ def register_errors(router: Router):
     async def global_error(event: ErrorEvent):
         message = _get_message_from_error_event(event)
         await message.answer(DEFAULT_ERROR_MESSAGE)
+        user: types.User = event.update.event.from_user
+        await message.bot.send_message(
+            chat_id=admin_logs_id,
+            text=f'Ошибка у пользователя @{user.username} #{user.id}:\n\n'
+                 f'{event.exception!r}'
+        )
         logging.critical(event.exception, exc_info=True)

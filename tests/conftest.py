@@ -1,8 +1,12 @@
 import pytest
+from application.payments import PaymentsService
+from application.rates import RatesService
 from application.subscriptions.service import SubscriptionsTgBotService
+from bootstrap import Container, create_container
 from config.settings import Settings
 from infra.xui_vpn.shared.factory import create_xui_vpn
 from logs import config_logger
+from presentation.bot.shared import loader
 
 
 @pytest.fixture(scope='session')
@@ -16,6 +20,11 @@ def settings():
 
 
 @pytest.fixture
+def container(settings):
+    return create_container(bot=loader.create_bot(settings.bot_token),
+                            settings=settings)
+
+@pytest.fixture
 def xui_vpn(settings):
     return create_xui_vpn(
         api_key=settings.xui_api_key,
@@ -26,4 +35,9 @@ def xui_vpn(settings):
 
 @pytest.fixture
 def subs_service(xui_vpn):
-    return SubscriptionsTgBotService(vpn_client=xui_vpn)
+    return SubscriptionsTgBotService(vpn_client=xui_vpn, rates=RatesService())
+
+
+@pytest.fixture
+def payment_service(container) -> PaymentsService:
+    return container.payments()

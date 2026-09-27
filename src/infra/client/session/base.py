@@ -8,11 +8,15 @@ class BaseSession(ABC):
     def __init__(self, headers: dict | None = None):
         self._headers = headers
 
+    def set_default_headers(self, headers: dict) -> None:
+        self._headers = headers
+
     @abstractmethod
     async def get(self, url: str, params: dict | None = None): pass
 
     @abstractmethod
-    async def post(self, url: str, data: dict | None = None, params: dict | None = None): pass
+    async def post(self, url: str, data: dict | None = None, params: dict | None = None,
+                   headers: dict | None = None): pass
 
     @abstractmethod
     async def close(self) -> None:  # pragma: no cover

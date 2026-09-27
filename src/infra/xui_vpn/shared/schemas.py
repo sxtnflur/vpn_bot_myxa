@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import Generic, TypeVar
 
@@ -31,18 +33,3 @@ class ClientPayload(BaseModel):
     comment: str | None = None
     reset_day: int | None = Field(alias='resetDay', default=None)
     reset_max: int | None = Field(alias='resetMax', default=None)
-
-
-# class UpdateClientPayload(ClientPayload):
-#     email: str
-#     sub_id: str | None = Field(alias='subId', default=None)
-#     uuid: str | None = None
-#     total_gb: int | None = Field(alias='totalGB', default=None)
-#     expiry_time: int | None = Field(alias='expiryTime', default=None)
-#     tg_id: int | None = Field(alias='tgId', default=None)
-#     limit_ip: int | None = Field(alias='limitIp', default=None)
-#     enable: bool | None = None
-#     group: str | None = None
-#     comment: str | None = None
-#     reset_day: int | None = Field(alias='resetDay', default=None)
-#     reset_max: int | None = Field(alias='resetMax', default=None)

@@ -4,19 +4,19 @@ from domain.rates.sub_rate import SubRate
 
 
 class RatesService:
-    def __init__(self):
+    def __init__(self) -> None:
         self._rates: dict[int, SubRate] = {
             1: SubRate(
                 id=1,
-                name='Vless - 230 руб',
-                price=230,
-                protocol='vless',
+                name='LTE для телефона - 200 руб',
+                price=200,
+                protocol='!wireguard',
                 sub_td=datetime.timedelta(days=30)
             ),
 
             2: SubRate(
                 id=2,
-                name='Wireguard - 500 руб',
+                name='WIFI для роутера - 500 руб',
                 price=500,
                 protocol='wireguard',
                 sub_td=datetime.timedelta(days=30)

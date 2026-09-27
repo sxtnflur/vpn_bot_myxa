@@ -11,6 +11,7 @@ class XUIVPN:
             sub_base_url: str,
             session: BaseSession
     ):
+        session.set_default_headers({'Authorization': f'Bearer {api_key}'})
         self.clients = ClientsMethods(base_url=base_url, api_key=api_key, session=session)
         self.inbounds = InboundsMethods(base_url=base_url, api_key=api_key, session=session)
 

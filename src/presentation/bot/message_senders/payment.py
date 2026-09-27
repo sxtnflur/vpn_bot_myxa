@@ -25,3 +25,17 @@ class AiogramPaymentMessageSender(PaymentMessageSender):
                 )]
             ])
         )
+
+    async def on_error_payment(self, telegram_id: int, message: str) -> None:
+        await self._bot.send_message(
+            chat_id=telegram_id,
+            text=message,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text='Помощь', callback_data='support'
+                )],
+                [InlineKeyboardButton(
+                    text='В меню', callback_data='menu'
+                )]
+            ])
+        )

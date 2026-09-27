@@ -1,4 +1,5 @@
 from infra.client.session.base import BaseSession
+from infra.xui_vpn.clients.bulk_attach import BulkAttachClient, BulDetachClient
 from infra.xui_vpn.clients.llinks import GetLinks
 from infra.xui_vpn.clients.onlines import GetOnlineEmails
 from infra.xui_vpn.clients.sub_links import GetSubLinks
@@ -24,4 +25,6 @@ class ClientsMethods(BaseXuiMethods):
         self.links = GetLinks(base_url, api_key, session)
         self.traffic = GetTraffic(base_url, api_key, session)
         self.onlines = GetOnlineEmails(base_url, api_key, session)
+        self.bulk_attach = BulkAttachClient(base_url, api_key, session)
+        self.bulk_detach = BulDetachClient(base_url, api_key, session)
         super().__init__(base_url, api_key, session)
