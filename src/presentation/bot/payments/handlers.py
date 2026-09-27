@@ -171,8 +171,9 @@ async def extend_sub_from_profile(
         email=sub.email
     )
 
-    await screens.pay_link_by_email(
-        sub=sub, pay_link=pay_link,
+    # Подписка выбрана в профиле — почту перепроверять не нужно, только сумма и ссылка
+    await screens.extend_pay_link(
+        amount=amount, pay_link=pay_link,
         back_callback=ProfilePageCallback(page=callback_data.page).pack()
     ).answer(call, 'edit')
 

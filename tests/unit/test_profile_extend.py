@@ -113,16 +113,27 @@ async def test_extend_handler_creates_payment_for_sub(subs_service, vpn_client):
     answer.assert_awaited_once()
 
 
-async def test_extend_handler_back_returns_to_profile_page(subs_service, vpn_client):
-    from presentation.bot.payments import screens
+async def test_extend_handler_shows_only_price_and_pay_link(subs_service, vpn_client):
+    # Подписка выбрана в профиле — экран «проверьте почту и дату» не нужен
+    from presentation.bot.payments.handlers import extend_sub_from_profile
+    from presentation.bot.shared.screen import ScreenDef
     vpn_client.clients.get_by_tg_id.return_value = _clients(1)
-    sub = await subs_service.get_user_subscription_by_sub_id(100, 'sub-u1@mail.ru')
+    subs_by_email = MagicMock(get_subscription_amount_by_sub=AsyncMock(return_value=500))
+    payments = MagicMock(create_payment=AsyncMock(return_value='https://pay.example/1'))
 
-    screen = screens.pay_link_by_email(sub, 'https://pay.example/1',
-                                       back_callback=ProfilePageCallback(page=3).pack())
+    with patch.object(ScreenDef, 'answer', autospec=True) as answer:
+        await extend_sub_from_profile(
+            _call(), ExtendSubCallback(sub_id='sub-u1@mail.ru', page=3), _state(),
+            subs_service=subs_service, subs_by_email_service=subs_by_email, payment_service=payments
+        )
 
-    callbacks = [b.callback_data for row in screen.reply_markup.inline_keyboard for b in row]
-    assert ProfilePageCallback(page=3).pack() in callbacks
+    screen: ScreenDef = answer.await_args.args[0]
+    assert screen.text == 'Продление подписки за 500 руб'
+    buttons = [b for row in screen.reply_markup.inline_keyboard for b in row]
+    assert [(b.text, b.url, b.callback_data) for b in buttons] == [
+        ('Оплатить', 'https://pay.example/1', None),
+        ('Назад', None, ProfilePageCallback(page=3).pack()),  # обратно на ту же страницу профиля
+    ]
 
 
 async def test_extend_handler_missing_sub_alerts(subs_service, vpn_client):

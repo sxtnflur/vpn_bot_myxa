@@ -124,4 +124,5 @@ async def test_screen_empty_offers_to_buy(subs_service, vpn_client):
     screen = client_statistic(page, tz=MSK)
 
     assert 'нет подписок' in screen.text
-    assert 'buy' in _callbacks(screen)
+    assert 'rates' in _callbacks(screen)
+    assert 'increase_sub_by_email' in _callbacks(screen)

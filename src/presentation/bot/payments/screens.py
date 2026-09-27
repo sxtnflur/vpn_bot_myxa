@@ -7,7 +7,7 @@ from presentation.bot.payments.callback_datas import SelectRateCallback
 from presentation.bot.shared.screen import ScreenDef
 from presentation.bot.shared.utils.date import sub_end_to_string
 
-ADD_SUB_BTN = InlineKeyboardButton(text='➕ Добавить подписку', callback_data='rates')
+ADD_SUB_BTN = InlineKeyboardButton(text='➕ Купить подписку', callback_data='rates')
 EXTEND_SUB_BTN = InlineKeyboardButton(text='🔄 Продлить подписку', callback_data='increase_sub_by_email')
 MENU_BTN = InlineKeyboardButton(text='В меню', callback_data='menu')
 
@@ -36,7 +36,7 @@ def rates(_rates: list[SubRate]):
     return ScreenDef(
         text=text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=ikb + [
-            [InlineKeyboardButton(text='Назад', callback_data='buy')]
+            [InlineKeyboardButton(text='Назад', callback_data='menu')]
         ])
     )
 
@@ -100,8 +100,18 @@ def ask_email(profile_command: str):
              f'Укажите ваш email для продления подписки:',
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text='Назад', callback_data='buy'
+                text='Назад', callback_data='menu'
             )]
+        ])
+    )
+
+
+def extend_pay_link(amount: int, pay_link: str, back_callback: str):
+    return ScreenDef(
+        text=f'Продление подписки за {amount} руб',
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text='Оплатить', url=pay_link)],
+            [InlineKeyboardButton(text='Назад', callback_data=back_callback)]
         ])
     )
 
@@ -127,7 +137,7 @@ def email_not_found(email: str):
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [ADD_SUB_BTN],
             [InlineKeyboardButton(
-                text='Назад', callback_data='buy'
+                text='Назад', callback_data='menu'
             )]
         ])
     )
