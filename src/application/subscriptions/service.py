@@ -15,6 +15,11 @@ def rate_id_to_group(rate_id: int):
     return str(rate_id)
 
 
+def create_client_email(telegram_id: int, rate_id: int) -> str:
+    # email в 3x-ui уникален, поэтому у каждого тарифа пользователя свой клиент
+    return f'{telegram_id}_{rate_id}'
+
+
 class SubscriptionsTgBotService:
     def __init__(self, vpn_client: XUIVPN, rates: RatesService, inbounds_service: InboundsService):
         self._vpn_client = vpn_client
@@ -104,7 +109,7 @@ class SubscriptionsTgBotService:
             inbounds_ids = await self._get_inbounds_ids(protocol_filter=rate.protocol)
             comment = self._create_comment(full_name, username)
 
-            email = str(telegram_id)
+            email = create_client_email(telegram_id, rate_id)
             expire_at = (datetime.datetime.utcnow() + expire_in).replace(tzinfo=datetime.timezone.utc)
             client = ClientPayload(
                 email=email,

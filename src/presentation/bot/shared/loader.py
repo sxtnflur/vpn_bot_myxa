@@ -1,6 +1,5 @@
 from presentation.bot.shared.errors import register_errors
 from presentation.bot.shared.middlewares import register_middlewares
-from typing_extensions import Literal
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -19,8 +18,8 @@ def create_bot(token: str):
                ))
 
 
-def create_dp(storage_type: Literal['memory', 'redis'], settings: Settings):
-    if storage_type == 'redis':
+def create_dp(settings: Settings):
+    if settings.redis_url:
         from aiogram.fsm.storage.redis import RedisStorage
         storage = RedisStorage.from_url(settings.redis_url)
     else:

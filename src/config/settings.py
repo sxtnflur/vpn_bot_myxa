@@ -30,15 +30,19 @@ class Settings(BaseSettings):
 
     tz: datetime.timedelta = datetime.timedelta(hours=3)
 
+    # Если не задан — кэш и FSM хранятся в памяти и теряются при рестарте
+    redis_url: str | None = None
+
     log_level: Literal['DEBUG', 'INFO', 'WARN', 'ERROR'] = 'DEBUG'
-    test_payment: bool = True
+    # Без значения по умолчанию: тестовый режим раздаёт подписки бесплатно, его нужно указывать явно
+    test_payment: bool
 
     class Config:
         case_sensitive = False
 
 
 class WebhookSettings(Settings):
-    webhook_url: str
+    webhook_url: str  # без app_prefix и /webhook
     port: int
     webhook_secret: str | None = None
     app_prefix: str = '/vpnmyxa'

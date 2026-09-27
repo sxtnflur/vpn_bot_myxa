@@ -104,15 +104,36 @@ async def test_add_subscription_expired_counts_from_now(subs_service, vpn_client
     assert abs(payload.expiry_time - to_ms(utcnow() + 30 * DAY)) < MINUTE_MS
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: новый клиент всегда получает email=str(telegram_id); '
-                                       'при покупке второго тарифа 3x-ui ответит "email already in use"')
-async def test_second_rate_does_not_reuse_email(subs_service, vpn_client):
-    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(email='100', group='1')]
-
-    await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=2)
+@pytest.mark.parametrize('rate_id', [1, 2])
+async def test_new_client_email_is_tg_id_and_rate(subs_service, vpn_client, rate_id):
+    await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=rate_id)
 
     payload: ClientPayload = vpn_client.clients.add.await_args.args[0]
-    assert payload.email != '100'
+    assert payload.email == f'100_{rate_id}'
+
+
+async def test_second_rate_creates_separate_client(subs_service, vpn_client):
+    # старый клиент первого тарифа (email = tg_id) — второй тариф не должен с ним конфликтовать
+    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(email='100', group='1')]
+
+    result = await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=2)
+
+    assert result.created is True
+    vpn_client.clients.update.assert_not_awaited()
+    payload: ClientPayload = vpn_client.clients.add.await_args.args[0]
+    assert payload.email == '100_2'
+    assert payload.group == '2'
+
+
+async def test_legacy_client_of_same_rate_is_extended_not_duplicated(subs_service, vpn_client):
+    # клиенты, созданные до смены формата (email = tg_id), продлеваются как раньше
+    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(email='100', group='1')]
+
+    await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=1)
+
+    vpn_client.clients.add.assert_not_awaited()
+    email, _ = _last_update_payload(vpn_client)
+    assert email == '100'
 
 
 @pytest.mark.xfail(strict=True, reason='BUG: при продлении не передаются limitIp/totalGB, '

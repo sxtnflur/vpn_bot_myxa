@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from decimal import Decimal
 
@@ -26,6 +27,7 @@ class PaymentsService:
         self._payment_key = payment_key
         self._cache = cache
         self._fake = fake
+        self._webhook_lock = asyncio.Lock()
 
     async def create_payment(
             self,
@@ -88,49 +90,48 @@ class PaymentsService:
             payment_id: str,
             metadata: dict
     ) -> None:
+        # Лок: два одновременных вебхука с одним payment_id не должны выдать подписку дважды
+        async with self._webhook_lock:
+            if await self._is_processed(payment_id):
+                return
 
-        if not await self._is_idempotent_callback(
-            payment_id
-        ):
-            return
+            telegram_id = metadata['telegram_id']
+            full_name = metadata['full_name']
+            username = metadata['username']
 
-        telegram_id = metadata['telegram_id']
-        full_name = metadata['full_name']
-        username = metadata['username']
+            rate_id = metadata.get('rate_id')
+            email = metadata.get('email')
 
-        rate_id = metadata.get('rate_id')
-        email = metadata.get('email')
+            if email is not None:
+                expire_at = await self._subs_service.increase_subscription_by_email(
+                    email=email, expire_in=datetime.timedelta(days=30)
+                )
+            elif rate_id is not None:
+                added_sub = await self._subs_service.add_subscription(
+                    telegram_id=telegram_id,
+                    full_name=full_name,
+                    username=username,
+                    rate_id=rate_id
+                )
+                expire_at = added_sub.expire_at
+            else:
+                await self._mark_processed(payment_id)
+                await self._sender.on_error_payment(
+                    telegram_id,
+                    message='Произошла ошибка во время оплаты. Обратитесь в поддержку: /support'
+                )
+                return
 
-        if email is not None:
-            expire_at = await self._subs_service.increase_subscription_by_email(
-                email=email, expire_in=datetime.timedelta(days=30)
-            )
-        elif rate_id is not None:
-            added_sub = await self._subs_service.add_subscription(
-                telegram_id=telegram_id,
-                full_name=full_name,
-                username=username,
-                rate_id=rate_id
-            )
-            expire_at = added_sub.expire_at
-        else:
-            await self._sender.on_error_payment(
-                telegram_id,
-                message='Произошла ошибка во время оплаты. Обратитесь в поддержку: /support'
-            )
-            return
+            # Помечаем только после выдачи подписки: если 3x-ui упал, ретрай RollyPay обработается заново
+            await self._mark_processed(payment_id)
 
         await self._sender.on_payment(telegram_id, expire_at=expire_at)
 
-    async def _is_idempotent_callback(self, payment_id: str) -> bool:
+    async def _is_processed(self, payment_id: str) -> bool:
         payment_ids = await self._cache.get('payment_ids')
+        return payment_ids is not None and payment_id in payment_ids
 
-        if payment_ids is None:
-            payment_ids = []
-
-        if payment_id in payment_ids:
-            return False
-
+    async def _mark_processed(self, payment_id: str) -> None:
+        payment_ids = await self._cache.get('payment_ids') or []
         payment_ids.append(payment_id)
         await self._cache.set('payment_ids', payment_ids)
-        return True

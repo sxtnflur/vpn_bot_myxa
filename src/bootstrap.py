@@ -69,7 +69,6 @@ class Container(containers.DeclarativeContainer):
 
     cache = providers.Singleton(
         create_cache_service,
-        'memory',
         settings=settings.provided
     )
 

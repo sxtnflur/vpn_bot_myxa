@@ -88,3 +88,4 @@ class RollyPay:
             url=self._base_url + '/api/v1/terminals/' + terminal_id,
             data={'callback_url': webhook_url}
         )
+        print(f'{response=}')

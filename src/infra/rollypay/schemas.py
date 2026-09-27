@@ -28,6 +28,7 @@ class WebhookCallback(BaseModel):
     event_type: str
     payment_id: str
     order_id: str
+    status: str | None = None
     amount: float
     currency: str
     test: bool

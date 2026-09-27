@@ -37,3 +37,18 @@ async def test_rolly_pay_strategy_create_payment(rollypay):
         expired_date=None
     )
     print(f'{result=}')
+
+
+# @pytest.skip
+async def test_set_callback_url(rollypay):
+    await rollypay.set_webhook_url(
+        webhook_url='https://cryptowebapp.bigling.ru/vpnmyxa/payment/rollypay',
+        terminal_id='5fcb0276-9e66-433c-96b2-c11be88a60c0'
+    )
+
+
+async def test__callback_url___(rollypay):
+    await rollypay.set_webhook_url(
+        webhook_url='https://cryptowebapp.bigling.ru/vpnmyxa/payment/rollypay',
+        terminal_id='5fcb0276-9e66-433c-96b2-c11be88a60c0'
+    )

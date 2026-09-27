@@ -1,9 +1,8 @@
 from config.settings import Settings
-from typing_extensions import Literal
 
 
-def create_cache_service(strategy: Literal['memory', 'redis'], settings: Settings):
-    if strategy == 'memory':
+def create_cache_service(settings: Settings):
+    if not settings.redis_url:
         from infra.cache.memory import MemoryCacheService
         return MemoryCacheService()
 
