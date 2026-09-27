@@ -97,9 +97,6 @@ def client_statistic(page: SubscriptionsPage, tz: datetime.timedelta, header: st
         ikb.append([InlineKeyboardButton(
             text='➕ Купить подписку', callback_data='rates'
         )])
-        ikb.append([InlineKeyboardButton(
-            text='🔄 Продлить подписку', callback_data='increase_sub_by_email'
-        )])
     ikb.append([InlineKeyboardButton(
         text='В меню', callback_data='menu'
     )])

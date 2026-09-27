@@ -9,6 +9,7 @@ from application.rates import RatesService
 from domain.cache.cache_service import CacheService
 from domain.payments.registry import PaymentsRegistry
 from application.subscriptions.service import SubscriptionsTgBotService
+from domain.payments.status import PaymentStatus
 from presentation.bot.shared.errors.bot_errors import PaymentError
 
 
@@ -71,7 +72,7 @@ class PaymentsService:
             payment_id = f'test-payment-{telegram_id}-{datetime.datetime.now().timestamp()}'
             await self.on_payment_webhook(
                 payment_id, metadata,
-                is_succeed=True
+                status=PaymentStatus.success
             )
             url = 'https://example.com'
             return url
@@ -90,16 +91,19 @@ class PaymentsService:
             self,
             payment_id: str,
             metadata: dict,
-            is_succeed: bool
+            status: PaymentStatus
     ) -> None:
         telegram_id = metadata['telegram_id']
 
         try:
-            if not is_succeed:
+            if status == PaymentStatus.canceled:
                 await self._sender.on_error_payment(
                     telegram_id,
-                    'Оплата была отклонена. Обратитесь в поддержку: /support'
+                    'Оплата была отклонена.\n\n'
+                    'Если вы считаете, что это ошибка, обратитесь в поддержку: /support'
                 )
+                return
+            elif status == PaymentStatus.expired:
                 return
 
             # Лок: два одновременных вебхука с одним payment_id не должны выдать подписку дважды

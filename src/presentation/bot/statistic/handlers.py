@@ -35,6 +35,8 @@ async def profile_handler(event: Message | CallbackQuery, settings: Settings):
 router.callback_query(F.data == 'statistic')(profile_handler)
 # «Обновить» на сообщениях, отправленных до пагинации
 router.callback_query(F.data == 'update_statistic')(profile_handler)
+# «Продлить подписку» (ввод email) на старых сообщениях — продление теперь только из профиля
+router.callback_query(F.data == 'increase_sub_by_email')(profile_handler)
 router.message(Command(commands.STATISTIC))(profile_handler)
 
 

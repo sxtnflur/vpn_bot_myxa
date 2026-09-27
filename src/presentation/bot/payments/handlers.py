@@ -13,23 +13,11 @@ from dependency_injector.wiring import Provide, inject
 from presentation.bot import commands
 from presentation.bot.payments import screens
 from presentation.bot.payments.callback_datas import SelectRateCallback
-from presentation.bot.payments.states import IncreaseSubStates, AddSubStates
+from presentation.bot.payments.states import AddSubStates
 from presentation.bot.shared.utils.email import normalize_email
 from presentation.bot.statistic.callback_datas import ExtendSubCallback, ProfilePageCallback
 
 router = Router()
-
-
-@router.callback_query(F.data == 'buy')
-async def buy_handler(
-    event: CallbackQuery | Message,
-    state: FSMContext
-):
-    await state.clear()
-    await screens.buy_menu().answer(event, 'edit')
-
-
-router.message(Command(commands.RATES))(buy_handler)
 
 
 # ---------- Добавить подписку: тариф -> email -> оплата ----------
@@ -37,14 +25,19 @@ router.message(Command(commands.RATES))(buy_handler)
 @router.callback_query(F.data == 'rates')
 @inject
 async def rates_handler(
-    call: CallbackQuery,
+    event: CallbackQuery | Message,
     state: FSMContext,
     rates_service: RatesService = Provide[Container.rates]
 ):
     # Кнопка «Назад» из ввода email ведёт сюда — выходим из состояния ожидания email
     await state.clear()
     rates = rates_service.get_rates()
-    await screens.rates(rates).answer(call, 'edit')
+    await screens.rates(rates).answer(event, 'edit')
+
+
+router.message(Command(commands.RATES))(rates_handler)
+# Кнопка «Добавить / Продлить подписку» на старых сообщениях
+router.callback_query(F.data == 'buy')(rates_handler)
 
 
 @router.callback_query(SelectRateCallback.filter())
@@ -93,51 +86,6 @@ async def add_sub_get_email(
         telegram_id=message.from_user.id
     )
     await screens.pay_link(rate=rate, email=email, link=payment_link).answer(message)
-
-
-# ---------- Продлить подписку по email ----------
-
-@router.callback_query(F.data == 'increase_sub_by_email')
-async def increase_sub_by_email(
-    call: CallbackQuery,
-    state: FSMContext
-):
-    await state.set_state(IncreaseSubStates.email)
-    await screens.ask_email(commands.PROFILE).answer(call, 'edit')
-
-
-@router.message(IncreaseSubStates.email)
-@inject
-async def increase_sub_by_email_get_email(
-    message: Message, state: FSMContext,
-    subs_service: SubscriptionByEmailService = Provide[Container.subs_by_email],
-    payment_service: PaymentsService = Provide[Container.payments]
-):
-    if not message.text:
-        await message.answer('Ожидаю почту')
-        return
-
-    email = message.text.strip()
-
-    sub = await subs_service.get_subscription_by_email(email)
-    if sub is None:
-        await screens.email_not_found(email).answer(message)
-        return
-
-    await state.clear()
-
-    amount = await subs_service.get_subscription_amount_by_sub(sub)
-
-    pay_link = await payment_service.create_payment(
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-        amount=amount,
-        description=f'Оплата подписки по почту {email}',
-        email=email
-    )
-
-    await screens.pay_link_by_email(sub=sub, pay_link=pay_link).answer(message)
 
 
 # ---------- Продлить подписку из профиля (без ввода email) ----------

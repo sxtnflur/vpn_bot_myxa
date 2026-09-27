@@ -2,6 +2,7 @@ import logging
 
 from aiohttp import web
 from application.payments import PaymentsService
+from domain.payments.status import PaymentStatus
 from infra.rollypay.client import RollyPay
 from infra.rollypay.schemas import WebhookCallback
 from pydantic import ValidationError
@@ -40,16 +41,23 @@ def create_router(payments_service: PaymentsService,
             logging.error('RollyPay: оплата %s без metadata', data.payment_id)
             return web.Response(text='No metadata', status=200)
 
-        if data.status in ('created', 'processing', 'chargeback', 'refunded'):
-            logging.warning(f'Ignored status: {data.status}')
-            return web.Response(text='Ignored Status', status=200)
-
         logging.info(f'Новый платеж: {data}')
+
+        match data.status:
+            case 'expired':
+                status = PaymentStatus.expired
+            case 'canceled':
+                status = PaymentStatus.canceled
+            case 'paid':
+                status = PaymentStatus.success
+            case _:
+                logging.warning(f'Ignored status: {data.status}')
+                return web.Response(text='Ignored Status', status=200)
 
         await payments_service.on_payment_webhook(
             payment_id=data.payment_id,
             metadata=data.metadata,
-            is_succeed=data.status not in ('canceled', 'expired')
+            status=status
         )
         return web.Response(text='OK', status=200)
 

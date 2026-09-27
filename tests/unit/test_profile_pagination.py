@@ -125,4 +125,4 @@ async def test_screen_empty_offers_to_buy(subs_service, vpn_client):
 
     assert 'нет подписок' in screen.text
     assert 'rates' in _callbacks(screen)
-    assert 'increase_sub_by_email' in _callbacks(screen)
+    assert 'increase_sub_by_email' not in _callbacks(screen)  # продление только кнопкой у подписки
