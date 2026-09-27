@@ -40,6 +40,8 @@ def create_router(payments_service: PaymentsService,
             logging.error('RollyPay: оплата %s без metadata', data.payment_id)
             return web.Response(text='No metadata', status=200)
 
+        logging.info(f'Новый платеж: {data}')
+
         await payments_service.on_payment_webhook(
             payment_id=data.payment_id,
             metadata=data.metadata,
