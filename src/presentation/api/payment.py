@@ -43,7 +43,7 @@ def create_router(payments_service: PaymentsService,
         await payments_service.on_payment_webhook(
             payment_id=data.payment_id,
             metadata=data.metadata,
-            is_succeed=data.event_type == 'payment.paid' and data.status == 'paid'
+            is_succeed=data.status not in ('canceled', 'expired')
         )
         return web.Response(text='OK', status=200)
 
