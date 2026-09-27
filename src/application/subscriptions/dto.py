@@ -77,9 +77,27 @@ ExpandedSubscription = User
 class AddSubscriptionResponse:
     created: bool
     expire_at: datetime.datetime | None  # None — бессрочно
+    email: str | None = None  # email созданного клиента
 
 
 @dataclass(frozen=True)
 class SubscriptionLinks:
     sub_url: str
     happ_url: str
+
+
+@dataclass(frozen=True)
+class SubscriptionsPage:
+    items: list[ExpandedSubscription]
+    page: int  # с 0
+    pages: int  # всегда >= 1, даже если подписок нет
+    total: int
+    offset: int  # индекс первой подписки страницы среди всех подписок пользователя
+
+    @property
+    def has_prev(self) -> bool:
+        return self.page > 0
+
+    @property
+    def has_next(self) -> bool:
+        return self.page < self.pages - 1

@@ -30,12 +30,16 @@ class Settings(BaseSettings):
 
     tz: datetime.timedelta = datetime.timedelta(hours=3)
 
+    # Сколько подписок показывать на одной странице профиля
+    profile_page_size: int = 1
+
     # Если не задан — кэш и FSM хранятся в памяти и теряются при рестарте
     redis_url: str | None = None
 
     log_level: Literal['DEBUG', 'INFO', 'WARN', 'ERROR'] = 'DEBUG'
     # Без значения по умолчанию: тестовый режим раздаёт подписки бесплатно, его нужно указывать явно
     test_payment: bool
+    fake_payment: bool = False
 
     class Config:
         case_sensitive = False

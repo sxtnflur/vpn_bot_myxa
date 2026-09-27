@@ -9,6 +9,7 @@ from application.errors import NoSubError
 from presentation.bot import commands
 
 
+
 def _get_message(event: Message | CallbackQuery):
     if isinstance(event, CallbackQuery):
         return event.message

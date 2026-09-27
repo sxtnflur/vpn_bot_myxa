@@ -16,8 +16,8 @@ def start(
             callback_data='statistic'
         )],
         [InlineKeyboardButton(
-            text='💵 Купить / Продлить',
-            callback_data='rates'
+            text='💵 Добавить / Продлить подписку',
+            callback_data='buy'
         )],
         [
             InlineKeyboardButton(

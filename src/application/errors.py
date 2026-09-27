@@ -25,3 +25,7 @@ class SessionError(ServiceError):
 
 class IncreaseSubByEmailError(ServiceError):
     pass
+
+
+class SubscriptionAlreadyExistsError(ServiceError):
+    """Клиент с таким email уже есть в 3x-ui"""

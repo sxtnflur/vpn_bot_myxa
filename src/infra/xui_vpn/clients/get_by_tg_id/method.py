@@ -7,7 +7,5 @@ class GetClientsByTgId(BaseXuiMethod):
     async def __call__(self, tg_id: int) -> list[GetClientObject]:
         url = self._base_url + f'/panel/api/clients/get/tgId/{tg_id}'
         response = await self._session.get(url)
-        print(f'{response=}')
         result = GetClientsByTgIdResponse.model_validate(response, by_alias=True)
-        print(f'{result.obj=}')
         return result.obj

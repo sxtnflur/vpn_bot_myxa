@@ -1,4 +1,4 @@
-from presentation.bot.shared.errors import register_errors
+from presentation.bot.shared.errors.register import register_errors
 from presentation.bot.shared.middlewares import register_middlewares
 
 from aiogram import Bot, Dispatcher

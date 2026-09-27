@@ -1,6 +1,6 @@
 import datetime
 
-TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+TIME_FORMAT = '%d.%m.%Y %H:%M:%S'
 
 _DAYS = ('День', 'Дня', 'Дней')
 _HOURS = ('Час', 'Часа', 'Часов')

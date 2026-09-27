@@ -29,6 +29,5 @@ class GetClientsList(BaseXuiMethod):
             params.update(order=order)
 
         response = await self._session.get(url, params)
-        print(f'Получен ответ: {response}')
         result = ClientsListResponse.model_validate(response, by_alias=True)
         return result.obj

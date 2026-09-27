@@ -1,13 +1,14 @@
 import datetime
 
-from application.errors import ServiceError, IncreaseSubByEmailError
+from application.errors import ServiceError, IncreaseSubByEmailError, SubscriptionAlreadyExistsError
 from application.rates import RatesService
 from application.subscriptions.dto import Inbound as UserInbound, AddSubscriptionResponse, SubscriptionLinks, \
-    Subscription, ExpandedSubscription
+    Subscription, ExpandedSubscription, SubscriptionsPage
 from application.subscriptions.inbounds_service import InboundsService
 from domain.rates.sub_rate import ProtocolFilter
 from infra.xui_vpn import XUIVPN
-from infra.xui_vpn.clients.get.schemas import Client
+from infra.xui_vpn.clients.get.schemas import Client, GetClientObject
+from infra.xui_vpn.shared.exceptions import ClientAlreadyExistsError
 from infra.xui_vpn.shared.schemas import ClientPayload
 
 
@@ -80,13 +81,8 @@ class SubscriptionsTgBotService:
 
         return await self._extend_client(client_obj.client, expire_in)
 
-    async def _get_client_by_rate(self, telegram_id: int, rate_id: int) -> Client | None:
-        clients = await self._vpn_client.clients.get_by_tg_id(telegram_id)
-        group = rate_id_to_group(rate_id)
-        for client_obj in clients:
-            if client_obj.client.group == group:
-                return client_obj.client
-        return None
+    async def is_email_taken(self, email: str) -> bool:
+        return await self._vpn_client.clients.get(email) is not None
 
     async def add_subscription(
             self,
@@ -94,44 +90,41 @@ class SubscriptionsTgBotService:
             telegram_id: int,
             full_name: str,
             username: str | None,
-            rate_id: int
+            rate_id: int,
+            email: str | None = None
     ) -> AddSubscriptionResponse:
+        """
+        Всегда создаёт нового клиента (покупка тарифа — это добавление подписки, не продление)
+
+        :param email: email нового клиента. None — для платежей, созданных до ввода email: tg_id + rate_id
+        :raises SubscriptionAlreadyExistsError: клиент с таким email уже есть
+        """
         rate = self._rates.get_rate(rate_id)
-        group = rate_id_to_group(rate_id)
-        expire_in = rate.sub_td
+        email = email or create_client_email(telegram_id, rate_id)
 
-        client = await self._get_client_by_rate(telegram_id, rate_id)
+        if await self.is_email_taken(email):
+            raise SubscriptionAlreadyExistsError(f'Подписка с email {email} уже существует')
 
-        if client:
-            new_expire_at = await self._extend_client(
-                client, expire_in,
-                tg_id=telegram_id,
-                group=group,
-                comment=client.comment or self._create_comment(full_name, username)
-            )
-            return AddSubscriptionResponse(
-                created=False,
-                expire_at=new_expire_at
-            )
-        else:
-            inbounds_ids = await self._get_inbounds_ids(protocol_filter=rate.protocol)
-            comment = self._create_comment(full_name, username)
+        inbounds_ids = await self._get_inbounds_ids(protocol_filter=rate.protocol)
+        expire_at = datetime.datetime.now(datetime.timezone.utc) + rate.sub_td
+        client = ClientPayload(
+            email=email,
+            tg_id=telegram_id,
+            comment=self._create_comment(full_name, username),
+            expiry_time=round(expire_at.timestamp() * 1000),
+            group=rate_id_to_group(rate_id)
+        )
 
-            email = create_client_email(telegram_id, rate_id)
-            expire_at = (datetime.datetime.utcnow() + expire_in).replace(tzinfo=datetime.timezone.utc)
-            client = ClientPayload(
-                email=email,
-                tg_id=telegram_id,
-                comment=comment,
-                expiry_time=round(expire_at.timestamp() * 1000),
-                group=group
-            )
-
+        try:
             await self._vpn_client.clients.add(client, inbound_ids=inbounds_ids)
-            return AddSubscriptionResponse(
-                created=True,
-                expire_at=expire_at
-            )
+        except ClientAlreadyExistsError as e:
+            raise SubscriptionAlreadyExistsError(f'Подписка с email {email} уже существует') from e
+
+        return AddSubscriptionResponse(
+            created=True,
+            expire_at=expire_at,
+            email=email
+        )
 
     async def check_if_user_has_sub(self, telegram_id: int) -> bool:
         users = await self._vpn_client.clients.get_by_tg_id(telegram_id)
@@ -189,29 +182,80 @@ class SubscriptionsTgBotService:
             telegram_id=telegram_id
         )
 
+    @staticmethod
+    def _to_subscription(obj: GetClientObject) -> Subscription:
+        return Subscription.from_client(
+            email=obj.client.email,
+            expire_at=obj.client.expire_at,
+            sub_id=obj.client.sub_id,
+            comment=obj.client.comment,
+            enable=obj.client.enable,
+            inbound_ids=obj.inbound_ids,
+            group=obj.client.group,
+            telegram_id=obj.client.telegram_id
+        )
+
     async def get_user_subscriptions(self, telegram_id: int) -> list[ExpandedSubscription]:
         subs = await self._vpn_client.clients.get_by_tg_id(telegram_id)
-        expanded_subs: list[ExpandedSubscription] = []
-        for sub in subs:
-            expanded_subs.append(
-                await self._expand_sub(
-                    Subscription.from_client(
-                        email=sub.client.email,
-                        expire_at=sub.client.expire_at,
-                        sub_id=sub.client.sub_id,
-                        comment=sub.client.comment,
-                        enable=sub.client.enable,
-                        inbound_ids=sub.inbound_ids,
-                        group=sub.client.group,
-                        telegram_id=sub.client.telegram_id
-                    )
-                )
-            )
-        return expanded_subs
+        return [await self._expand_sub(self._to_subscription(sub)) for sub in subs]
+
+    async def get_user_subscriptions_page(
+            self, telegram_id: int, page: int, page_size: int
+    ) -> SubscriptionsPage:
+        """
+        Страница подписок пользователя. Трафик и онлайн запрашиваются только для подписок этой страницы
+
+        :param page: номер страницы с 0; выходящий за границы приводится к ближайшей существующей
+        """
+        if page_size < 1:
+            raise ValueError('page_size должен быть >= 1')
+
+        subs = await self._get_sorted_user_clients(telegram_id)
+        return await self._build_page(subs, page, page_size)
+
+    async def get_page_with_subscription(
+            self, telegram_id: int, email: str, page_size: int
+    ) -> SubscriptionsPage | None:
+        """
+        Страница профиля, на которой находится подписка с этим email.
+        None — подписка не принадлежит пользователю (например, он оплатил продление чужой подписки)
+        """
+        if page_size < 1:
+            raise ValueError('page_size должен быть >= 1')
+
+        subs = await self._get_sorted_user_clients(telegram_id)
+        for index, obj in enumerate(subs):
+            if obj.client.email.lower() == email.lower():
+                return await self._build_page(subs, index // page_size, page_size)
+        return None
+
+    async def _get_sorted_user_clients(self, telegram_id: int) -> list[GetClientObject]:
+        subs = await self._vpn_client.clients.get_by_tg_id(telegram_id)
+        # Стабильный порядок между запросами: по id клиента в панели (по порядку создания)
+        return sorted(subs, key=lambda obj: obj.client.id)
+
+    async def _build_page(self, subs: list[GetClientObject], page: int, page_size: int) -> SubscriptionsPage:
+        total = len(subs)
+        pages = max(1, -(-total // page_size))
+        page = min(max(page, 0), pages - 1)
+        start = page * page_size
+
+        items = [
+            await self._expand_sub(self._to_subscription(sub))
+            for sub in subs[start:start + page_size]
+        ]
+        return SubscriptionsPage(items=items, page=page, pages=pages, total=total, offset=start)
 
     async def get_subscription(self, telegram_id: int, rate_id: int) -> ExpandedSubscription:
         sub = await self.get_short_subscription(telegram_id, rate_id)
         return await self._expand_sub(sub)
+
+    async def get_user_subscription_by_sub_id(self, telegram_id: int, sub_id: str) -> Subscription | None:
+        """Подписка пользователя по subId. Чужие подписки не возвращаются"""
+        for obj in await self._vpn_client.clients.get_by_tg_id(telegram_id):
+            if obj.client.sub_id == sub_id:
+                return self._to_subscription(obj)
+        return None
 
     async def get_subscription_by_email(self, email: str) -> Subscription | None:
         sub = await self._vpn_client.clients.get(email)

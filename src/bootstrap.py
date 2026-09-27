@@ -64,7 +64,9 @@ class Container(containers.DeclarativeContainer):
     payments_sender = providers.Singleton(
         AiogramPaymentMessageSender,
         bot=bot,
-        tz=settings.provided.tz
+        tz=settings.provided.tz,
+        subs_service=subs,
+        profile_page_size=settings.provided.profile_page_size
     )
 
     cache = providers.Singleton(
@@ -80,7 +82,7 @@ class Container(containers.DeclarativeContainer):
         rates=rates,
         payment_key=PaymentKey.rollypay,
         cache=cache,
-        fake=False
+        fake=settings.provided.fake_payment
     )
 
     subs_by_email = providers.Singleton(

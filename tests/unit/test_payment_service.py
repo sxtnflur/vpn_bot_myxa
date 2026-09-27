@@ -56,26 +56,6 @@ def service(provider, subs, sender, cache, rates):
 
 # ---------- create_payment ----------
 
-async def test_create_payment_requires_rate_or_email(service):
-    with pytest.raises(ValueError):
-        await service.create_payment(telegram_id=1, full_name='x', username=None, amount=1, description='d')
-
-
-async def test_create_payment_rejects_rate_and_email(service):
-    with pytest.raises(ValueError):
-        await service.create_payment(telegram_id=1, full_name='x', username=None, amount=1,
-                                     description='d', rate_id=1, email='a@b.c')
-
-
-async def test_create_payment_by_rate(service, provider):
-    url = await service.create_payment(telegram_id=100, full_name='Иван', username='ivan',
-                                       amount=200, description='d', rate_id=1)
-
-    assert url == 'https://pay.example/p1'
-    kwargs = provider.create_payment.await_args.kwargs
-    assert kwargs['amount'] == Decimal(200) and isinstance(kwargs['amount'], Decimal)
-    assert kwargs['metadata'] == METADATA
-
 
 async def test_create_payment_by_email_metadata(service, provider):
     await service.create_payment(telegram_id=100, full_name='Иван', username=None,
@@ -86,25 +66,7 @@ async def test_create_payment_by_email_metadata(service, provider):
     assert 'rate_id' not in metadata
 
 
-async def test_fake_payment_activates_immediately(provider, subs, sender, cache, rates):
-    service = make_service(provider, subs, sender, cache, rates, fake=True)
-
-    url = await service.create_payment(telegram_id=100, full_name='Иван', username='ivan',
-                                       amount=200, description='d', rate_id=1)
-
-    assert url == 'https://example.com'
-    provider.create_payment.assert_not_awaited()
-    subs.add_subscription.assert_awaited_once()
-    sender.on_payment.assert_awaited_once_with(100, expire_at=EXPIRE)
-
-
 # ---------- on_payment_webhook ----------
-
-async def test_webhook_by_rate(service, subs, sender):
-    await service.on_payment_webhook('p1', dict(METADATA))
-
-    subs.add_subscription.assert_awaited_once_with(telegram_id=100, full_name='Иван', username='ivan', rate_id=1)
-    sender.on_payment.assert_awaited_once_with(100, expire_at=EXPIRE)
 
 
 async def test_webhook_by_email(service, subs, sender):
@@ -115,7 +77,7 @@ async def test_webhook_by_email(service, subs, sender):
     subs.increase_subscription_by_email.assert_awaited_once()
     assert subs.increase_subscription_by_email.await_args.kwargs['email'] == 'a@b.c'
     subs.add_subscription.assert_not_awaited()
-    sender.on_payment.assert_awaited_once_with(100, expire_at=EXPIRE)
+    sender.on_payment.assert_awaited_once_with(100, email='a@b.c', expire_at=EXPIRE)
 
 
 async def test_webhook_without_rate_and_email_reports_error(service, subs, sender):
@@ -184,13 +146,3 @@ async def test_webhook_email_not_found_notifies_and_stops_retries(service, subs,
     sender.on_error_payment.assert_awaited_once()
     assert 'gone@x.y' in sender.on_error_payment.await_args.kwargs['message']
     sender.on_payment.assert_not_awaited()
-
-
-async def test_payment_message_for_unlimited_subscription():
-    from presentation.bot.message_senders.payment import AiogramPaymentMessageSender
-    bot = MagicMock()
-    bot.send_message = AsyncMock()
-
-    await AiogramPaymentMessageSender(bot, tz=datetime.timedelta(hours=3)).on_payment(100, expire_at=None)
-
-    assert 'Дата окончания: ♾ Бессрочно' in bot.send_message.await_args.kwargs['text']

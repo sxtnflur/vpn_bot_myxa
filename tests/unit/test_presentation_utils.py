@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from application.subscriptions.dto import ExpandedSubscription, SubscriptionLinks, Subscription
+from application.subscriptions.dto import ExpandedSubscription, SubscriptionLinks, Subscription, SubscriptionsPage
 from presentation.bot.shared.utils.date import _plural, _DAYS, datetime_to_td_string, sub_end_to_string
 from presentation.bot.shared.utils.traffic import bytes_to_string, total_gb_to_string, gb_to_bytes, GB
 from presentation.bot.start import screens as start_screens
@@ -70,7 +70,8 @@ def _expanded(expire_at: datetime.datetime, email: str = '100') -> ExpandedSubsc
                                        'подписка показывается активной 3 часа после окончания')
 def test_statistic_remaining_time_not_shifted_by_tz():
     expire_at = datetime.datetime.utcnow() + datetime.timedelta(days=10, seconds=30)
-    text = client_statistic([_expanded(expire_at)], tz=MSK).text
+    page = SubscriptionsPage(items=[_expanded(expire_at)], page=0, pages=1, total=1, offset=0)
+    text = client_statistic(page, tz=MSK).text
     assert '(10 Дней)' in text
 
 

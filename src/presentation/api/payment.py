@@ -32,11 +32,6 @@ def create_router(payments_service: PaymentsService,
             logging.exception('RollyPay: невалидное тело вебхука: %r', raw_body)
             return web.Response(text='Invalid body', status=400)
 
-        # На любые другие события отвечаем 2xx, иначе RollyPay будет ретраить их до 8 раз
-        if data.event_type != 'payment.paid' or data.status != 'paid':
-            logging.info('RollyPay: пропущено событие %s (%s) для %s', data.event_type, data.status, data.payment_id)
-            return web.Response(text='Ignored', status=200)
-
         if data.test and not accept_test:
             logging.warning('RollyPay: тестовый платёж %s отклонён (TEST_PAYMENT=false)', data.payment_id)
             return web.Response(text='Test payments are disabled', status=200)
@@ -47,7 +42,8 @@ def create_router(payments_service: PaymentsService,
 
         await payments_service.on_payment_webhook(
             payment_id=data.payment_id,
-            metadata=data.metadata
+            metadata=data.metadata,
+            is_succeed=data.event_type == 'payment.paid' and data.status == 'paid'
         )
         return web.Response(text='OK', status=200)
 

@@ -18,7 +18,7 @@ bot_commands = [
     ),
     BotCommand(
         command=RATES,
-        description='💵 Купить / Продлить'
+        description='💵 Добавить / Продлить подписку'
     ),
     BotCommand(
         command=STATISTIC,
