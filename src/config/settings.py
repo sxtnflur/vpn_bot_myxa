@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
 class WebhookSettings(Settings):
     webhook_url: str
+    port: int
     webhook_secret: str | None = None
     app_prefix: str = '/vpnmyxa'
 

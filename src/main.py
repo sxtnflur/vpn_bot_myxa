@@ -88,7 +88,7 @@ def start_webhook():
 
     setup_application(app, dp, bot=bot)
 
-    web.run_app(app, host='0.0.0.0', port=int(os.getenv('PORT') or 8000))
+    web.run_app(app, host='0.0.0.0', port=settings.port)
 
 
 if __name__ == '__main__':
