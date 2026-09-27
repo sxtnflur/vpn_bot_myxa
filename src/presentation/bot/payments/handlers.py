@@ -22,8 +22,11 @@ router = Router()
 @inject
 async def rates_handler(
     call: CallbackQuery,
+    state: FSMContext,
     rates_service: RatesService = Provide[Container.rates]
 ):
+    # Кнопка «Назад» из ввода email ведёт сюда — выходим из состояния ожидания email
+    await state.clear()
     rates = rates_service.get_rates()
     await screens.rates(rates).answer(call, 'edit')
 
@@ -51,11 +54,11 @@ async def increase_sub_by_email_get_email(
         await message.answer('Ожидаю почту')
         return
 
-    email = message.text
+    email = message.text.strip()
 
     sub = await subs_service.get_subscription_by_email(email)
     if sub is None:
-        await message.answer('Подписки с такой почтой нет')
+        await screens.email_not_found(email).answer(message)
         return
 
     await state.clear()

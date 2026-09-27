@@ -31,44 +31,62 @@ class SubscriptionsTgBotService:
         comment = full_name
         if username:
             comment += f' @{username}'
-        return full_name
+        return comment
 
     async def _get_inbounds_ids(self, protocol_filter: ProtocolFilter | None = None) -> list[int]:
         return await self._inbounds_service.get_inbounds_ids(protocol_filter)
 
+    @staticmethod
+    def _calc_new_expiry(client: Client, expire_in: datetime.timedelta) -> tuple[int, datetime.datetime | None]:
+        """:return: новое значение expiryTime для 3x-ui (мс) и дата окончания (None — бессрочно)"""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expire_in_ms = round(expire_in.total_seconds() * 1000)
+
+        if client.is_unlimited:
+            # Оплата не должна превращать бессрочного клиента в срочного
+            return 0, None
+
+        if client.is_delayed_start:
+            # Срок ещё не начался: увеличиваем длительность, отсчёт по-прежнему с первого подключения
+            new_expiry = client.expiry_time - expire_in_ms
+            return new_expiry, now + datetime.timedelta(milliseconds=-new_expiry)
+
+        new_expire_at = max(client.expire_at, now) + expire_in
+        return round(new_expire_at.timestamp() * 1000), new_expire_at
+
+    async def _extend_client(
+            self, client: Client, expire_in: datetime.timedelta, **overrides
+    ) -> datetime.datetime | None:
+        """
+        Продлевает клиента, сохраняя все его поля (лимиты, uuid, subId, комментарий)
+
+        :return: новая дата окончания, None — бессрочно
+        """
+        new_expiry, new_expire_at = self._calc_new_expiry(client, expire_in)
+        payload = client.to_client_payload()
+        payload.expiry_time = new_expiry
+        payload.enable = True
+        for field, value in overrides.items():
+            setattr(payload, field, value)
+        await self._vpn_client.clients.update(client.email, payload)
+        return new_expire_at
+
     async def increase_subscription_by_email(
             self, email: str, expire_in: datetime.timedelta
-    ) -> datetime.datetime:
+    ) -> datetime.datetime | None:
         client_obj = await self._vpn_client.clients.get(email)
-        subscription = Subscription.from_client(
-            email=client_obj.client.email,
-            enable=client_obj.client.enable,
-            expire_at=client_obj.client.expiry_time,
-            inbound_ids=client_obj.inbound_ids,
-            sub_id=client_obj.client.sub_id,
-            telegram_id=client_obj.client.telegram_id
-        )
-        if subscription is None:
+        if client_obj is None:
             raise IncreaseSubByEmailError('Не найдена подписка')
 
-        if subscription.expire_at < datetime.datetime.utcnow():
-            expire_at = datetime.datetime.utcnow()
-        else:
-            expire_at = subscription.expire_at
+        return await self._extend_client(client_obj.client, expire_in)
 
-        new_expire_at = (expire_at + expire_in).replace(tzinfo=datetime.timezone.utc)
-
-        await self._vpn_client.clients.update(
-            subscription.email,
-            ClientPayload(
-                email=subscription.email,
-                tg_id=subscription.telegram_id,
-                comment=subscription.comment,
-                expiry_time=round(new_expire_at.timestamp() * 1000),
-                group=client_obj.client.group
-            )
-        )
-        return new_expire_at
+    async def _get_client_by_rate(self, telegram_id: int, rate_id: int) -> Client | None:
+        clients = await self._vpn_client.clients.get_by_tg_id(telegram_id)
+        group = rate_id_to_group(rate_id)
+        for client_obj in clients:
+            if client_obj.client.group == group:
+                return client_obj.client
+        return None
 
     async def add_subscription(
             self,
@@ -82,24 +100,14 @@ class SubscriptionsTgBotService:
         group = rate_id_to_group(rate_id)
         expire_in = rate.sub_td
 
-        subscription = await self.get_short_subscription(telegram_id, rate_id)
+        client = await self._get_client_by_rate(telegram_id, rate_id)
 
-        if subscription:
-            if subscription.expire_at < datetime.datetime.utcnow():
-                expire_at = datetime.datetime.utcnow()
-            else:
-                expire_at = subscription.expire_at
-
-            new_expire_at = (expire_at + expire_in).replace(tzinfo=datetime.timezone.utc)
-            await self._vpn_client.clients.update(
-                subscription.email,
-                ClientPayload(
-                    email=subscription.email,
-                    tg_id=telegram_id,
-                    comment=subscription.comment or self._create_comment(full_name, username),
-                    expiry_time=round(new_expire_at.timestamp() * 1000),
-                    group=group
-                )
+        if client:
+            new_expire_at = await self._extend_client(
+                client, expire_in,
+                tg_id=telegram_id,
+                group=group,
+                comment=client.comment or self._create_comment(full_name, username)
             )
             return AddSubscriptionResponse(
                 created=False,
@@ -127,7 +135,8 @@ class SubscriptionsTgBotService:
 
     async def check_if_user_has_sub(self, telegram_id: int) -> bool:
         users = await self._vpn_client.clients.get_by_tg_id(telegram_id)
-        return any(user.client.expiry_time < datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        return any(user.client.expire_at is None or user.client.expire_at > now
                    for user in users)
 
     def get_subscription_link(self, sub_id: str) -> SubscriptionLinks:
@@ -171,7 +180,7 @@ class SubscriptionsTgBotService:
         sub = filtered_subs[0]
         return Subscription.from_client(
             email=sub.client.email,
-            expire_at=sub.client.expiry_time,
+            expire_at=sub.client.expire_at,
             sub_id=sub.client.sub_id,
             comment=sub.client.comment,
             enable=sub.client.enable,
@@ -188,7 +197,7 @@ class SubscriptionsTgBotService:
                 await self._expand_sub(
                     Subscription.from_client(
                         email=sub.client.email,
-                        expire_at=sub.client.expiry_time,
+                        expire_at=sub.client.expire_at,
                         sub_id=sub.client.sub_id,
                         comment=sub.client.comment,
                         enable=sub.client.enable,
@@ -212,7 +221,7 @@ class SubscriptionsTgBotService:
         return Subscription.from_client(
             email=email,
             sub_id=sub.client.sub_id,
-            expire_at=sub.client.expiry_time,
+            expire_at=sub.client.expire_at,
             enable=sub.client.enable,
             inbound_ids=sub.inbound_ids,
             telegram_id=sub.client.telegram_id

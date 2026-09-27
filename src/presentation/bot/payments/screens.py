@@ -1,3 +1,5 @@
+from html import escape
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from application.subscriptions.dto import Subscription
 from domain.rates.sub_rate import SubRate
@@ -60,11 +62,23 @@ def pay_link_by_email(sub: Subscription, pay_link: str):
         text=f'''
 Убедитесь, что дата окончания подписки совпадает:
 
-Текущая дата окончания подписки для почты <b>{sub.email}</b>: {sub_end_to_string(sub.expire_at)}
+Текущая дата окончания подписки для почты <b>{escape(sub.email)}</b>: {sub_end_to_string(sub.expire_at)}
 ''',
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
                 text='Оплатить', url=pay_link
+            )]
+        ])
+    )
+
+
+def email_not_found(email: str):
+    return ScreenDef(
+        text=f'Подписки с почтой <b>{escape(email)}</b> нет.\n\n'
+             f'Проверьте email и отправьте его ещё раз:',
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text='Назад', callback_data='rates'
             )]
         ])
     )

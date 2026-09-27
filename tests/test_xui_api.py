@@ -23,7 +23,8 @@ async def test_get_clients_list(xui_vpn: XUIVPN):
         print(f'{client=}')
         assert client.client.email == row.email
         assert client.client.enable == row.enable
-        assert client.client.expiry_time == row.expiry_time
+        if client.client.expiry_time > 0:  # 0 — бессрочно, < 0 — отложенный старт
+            assert client.client.expire_at == row.expiry_time
         assert client.client.limit_ip == row.limit_ip
 
 

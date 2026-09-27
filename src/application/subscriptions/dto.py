@@ -19,7 +19,7 @@ class Inbound:
 class Subscription:
     email: str
     telegram_id: int | None
-    expire_at: datetime.datetime
+    expire_at: datetime.datetime | None  # None — бессрочно
     sub_id: str
     rate_id: int | None
     enable: bool
@@ -27,7 +27,7 @@ class Subscription:
     comment: str | None
 
     def __post_init__(self) -> None:
-        if self.expire_at.tzinfo is not None:
+        if self.expire_at is not None and self.expire_at.tzinfo is not None:
             self.expire_at = self.expire_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
     @classmethod
@@ -35,7 +35,7 @@ class Subscription:
             cls,
             email: str,
             telegram_id: int | None,
-            expire_at: datetime.datetime,
+            expire_at: datetime.datetime | None,
             sub_id: str,
             enable: bool,
             inbound_ids: list[int],
@@ -57,7 +57,7 @@ class Subscription:
 @dataclass(frozen=True)
 class User:
     email: str
-    expire_at: datetime.datetime
+    expire_at: datetime.datetime | None  # None — бессрочно
     sub_id: str
     active: bool
     load_up: int
@@ -76,7 +76,7 @@ ExpandedSubscription = User
 @dataclass(frozen=True)
 class AddSubscriptionResponse:
     created: bool
-    expire_at: datetime.datetime
+    expire_at: datetime.datetime | None  # None — бессрочно
 
 
 @dataclass(frozen=True)

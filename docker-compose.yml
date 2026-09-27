@@ -4,7 +4,30 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "${PORT}:${PORT}"
     expose:
       - "${PORT}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    container_name: vpnbot_myxa_redis
+    image: redis:7-alpine
+    # AOF: обработанные платежи и FSM переживают рестарт контейнера
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis_data:

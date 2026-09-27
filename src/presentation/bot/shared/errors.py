@@ -1,6 +1,7 @@
 import logging
+from html import escape
 
-from aiogram import Router, types
+from aiogram import Bot, Router, types
 from aiogram.filters import ExceptionTypeFilter
 from aiogram.types import Message, CallbackQuery, ErrorEvent
 
@@ -35,13 +36,19 @@ def register_errors(router: Router, admin_logs_id: int):
         logging.critical(event.exception, exc_info=True)
 
     @router.error()
-    async def global_error(event: ErrorEvent):
-        message = _get_message_from_error_event(event)
-        await message.answer(DEFAULT_ERROR_MESSAGE)
-        user: types.User = event.update.event.from_user
-        await message.bot.send_message(
-            chat_id=admin_logs_id,
-            text=f'Ошибка у пользователя @{user.username} #{user.id}:\n\n'
-                 f'{event.exception!r}'
-        )
+    async def global_error(event: ErrorEvent, bot: Bot):
+        # Сначала логируем: отправка сообщений ниже сама может упасть
         logging.critical(event.exception, exc_info=True)
+
+        message = _get_message_from_error_event(event)
+        if message is not None:
+            await message.answer(DEFAULT_ERROR_MESSAGE)
+
+        user: types.User | None = getattr(event.update.event, 'from_user', None)
+        user_info = f'@{user.username} #{user.id}' if user else 'неизвестного пользователя'
+        # repr исключения часто содержит <...>, а бот шлёт сообщения в HTML
+        await bot.send_message(
+            chat_id=admin_logs_id,
+            text=f'Ошибка у {escape(user_info)}:\n\n'
+                 f'{escape(repr(event.exception))}'
+        )

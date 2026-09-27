@@ -155,10 +155,10 @@ class SlowCache:
     async def get(self, key):
         value = self._data.get(key)
         await asyncio.sleep(0.01)
-        return list(value) if value is not None else None
+        return value
 
     async def set(self, key, value):
-        self._data[key] = list(value)
+        self._data[key] = value
 
 
 async def test_concurrent_duplicate_webhooks(provider, subs, sender, rates):
@@ -170,3 +170,27 @@ async def test_concurrent_duplicate_webhooks(provider, subs, sender, rates):
     )
 
     assert subs.add_subscription.await_count == 1
+
+
+async def test_webhook_email_not_found_notifies_and_stops_retries(service, subs, sender):
+    from application.errors import IncreaseSubByEmailError
+    subs.increase_subscription_by_email.side_effect = IncreaseSubByEmailError('Не найдена подписка')
+    metadata = {'telegram_id': 100, 'full_name': 'Иван', 'username': None, 'email': 'gone@x.y'}
+
+    await service.on_payment_webhook('p1', metadata)
+    await service.on_payment_webhook('p1', metadata)  # ретрай RollyPay
+
+    assert subs.increase_subscription_by_email.await_count == 1
+    sender.on_error_payment.assert_awaited_once()
+    assert 'gone@x.y' in sender.on_error_payment.await_args.kwargs['message']
+    sender.on_payment.assert_not_awaited()
+
+
+async def test_payment_message_for_unlimited_subscription():
+    from presentation.bot.message_senders.payment import AiogramPaymentMessageSender
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+
+    await AiogramPaymentMessageSender(bot, tz=datetime.timedelta(hours=3)).on_payment(100, expire_at=None)
+
+    assert 'Дата окончания: ♾ Бессрочно' in bot.send_message.await_args.kwargs['text']

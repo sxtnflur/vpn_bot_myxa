@@ -8,7 +8,11 @@ from pydantic import ValidationError
 
 
 def create_router(payments_service: PaymentsService,
-                  rolly_pay: RollyPay):
+                  rolly_pay: RollyPay,
+                  accept_test: bool = False):
+    """
+    :param accept_test: принимать тестовые платежи (test=true). В проде должно быть False
+    """
     router = web.RouteTableDef()
 
     @router.post('/payment/rollypay')
@@ -32,6 +36,10 @@ def create_router(payments_service: PaymentsService,
         if data.event_type != 'payment.paid' or data.status != 'paid':
             logging.info('RollyPay: пропущено событие %s (%s) для %s', data.event_type, data.status, data.payment_id)
             return web.Response(text='Ignored', status=200)
+
+        if data.test and not accept_test:
+            logging.warning('RollyPay: тестовый платёж %s отклонён (TEST_PAYMENT=false)', data.payment_id)
+            return web.Response(text='Test payments are disabled', status=200)
 
         if not data.metadata:
             logging.error('RollyPay: оплата %s без metadata', data.payment_id)

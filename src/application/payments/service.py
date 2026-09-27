@@ -1,7 +1,9 @@
 import asyncio
 import datetime
+import logging
 from decimal import Decimal
 
+from application.errors import IncreaseSubByEmailError
 from application.ports.message_sender import PaymentMessageSender
 from application.rates import RatesService
 from domain.cache.cache_service import CacheService
@@ -103,9 +105,20 @@ class PaymentsService:
             email = metadata.get('email')
 
             if email is not None:
-                expire_at = await self._subs_service.increase_subscription_by_email(
-                    email=email, expire_in=datetime.timedelta(days=30)
-                )
+                try:
+                    expire_at = await self._subs_service.increase_subscription_by_email(
+                        email=email, expire_in=datetime.timedelta(days=30)
+                    )
+                except IncreaseSubByEmailError:
+                    # Клиента удалили между оплатой и вебхуком — ретраи не помогут, нужен человек
+                    logging.error('Оплата %s: подписка по email %s не найдена', payment_id, email)
+                    await self._mark_processed(payment_id)
+                    await self._sender.on_error_payment(
+                        telegram_id,
+                        message=f'Оплата получена, но подписка {email} не найдена. '
+                                f'Обратитесь в поддержку: /support'
+                    )
+                    return
             elif rate_id is not None:
                 added_sub = await self._subs_service.add_subscription(
                     telegram_id=telegram_id,
@@ -127,11 +140,12 @@ class PaymentsService:
 
         await self._sender.on_payment(telegram_id, expire_at=expire_at)
 
+    @staticmethod
+    def _processed_key(payment_id: str) -> str:
+        return f'payment:processed:{payment_id}'
+
     async def _is_processed(self, payment_id: str) -> bool:
-        payment_ids = await self._cache.get('payment_ids')
-        return payment_ids is not None and payment_id in payment_ids
+        return await self._cache.get(self._processed_key(payment_id)) is not None
 
     async def _mark_processed(self, payment_id: str) -> None:
-        payment_ids = await self._cache.get('payment_ids') or []
-        payment_ids.append(payment_id)
-        await self._cache.set('payment_ids', payment_ids)
+        await self._cache.set(self._processed_key(payment_id), True)

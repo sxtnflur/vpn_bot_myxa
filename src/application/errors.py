@@ -13,6 +13,8 @@ class NoSubError(ServiceError):
 
 class SessionError(ServiceError):
     def __init__(self, status: int, json: dict | None = None, comment: str | None = None):
+        self.status = status
+        self.json = json
         message = f'SessionError {status}'
         if json:
             message += f' [{json}]'

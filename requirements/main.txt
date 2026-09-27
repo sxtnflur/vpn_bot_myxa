@@ -1,3 +1,6 @@
 aiogram
 dependency-injector
 async-yookassa
+redis
+python-dotenv
+certifi

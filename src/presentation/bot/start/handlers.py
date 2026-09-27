@@ -1,5 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 from config.settings import Settings
 from presentation.bot import commands
@@ -11,8 +12,10 @@ router = Router()
 @router.message(CommandStart())
 async def start_handler(
     event: CallbackQuery | Message,
+    state: FSMContext,
     settings: Settings
 ):
+    await state.clear()
     await screens.start(
         event.from_user.first_name,
         privacy_policy_link=settings.privacy_policy_url,

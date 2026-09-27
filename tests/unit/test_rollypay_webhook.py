@@ -145,3 +145,22 @@ async def test_webhook_unsigned_garbage_403(client, payments_service):
 async def test_webhook_rejects_get(client):
     resp = await client.get(PATH)
     assert resp.status == 405
+
+
+async def test_test_payment_rejected_when_test_mode_off(client, payments_service):
+    body = paid_body(test=True)
+    resp = await client.post(PATH, data=body, headers=sign(body))
+
+    assert resp.status == 200  # 2xx, чтобы RollyPay не ретраил
+    payments_service.on_payment_webhook.assert_not_awaited()
+
+
+async def test_test_payment_accepted_when_test_mode_on(rolly_pay, payments_service):
+    app = web.Application()
+    app.add_routes(create_router(payments_service=payments_service, rolly_pay=rolly_pay, accept_test=True))
+    body = paid_body(test=True)
+    async with TestClient(TestServer(app)) as client:
+        resp = await client.post(PATH, data=body, headers=sign(body))
+
+    assert resp.status == 200
+    payments_service.on_payment_webhook.assert_awaited_once()

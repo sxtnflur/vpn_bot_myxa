@@ -29,8 +29,9 @@ def _to_naive_utc(date: datetime.datetime) -> datetime.datetime:
 
 
 def sub_end_to_string(date: datetime.datetime | None):
+    """:param date: None — бессрочная подписка"""
     if date is None:
-        return 'Истекла'
+        return '♾ Бессрочно'
     date = _to_naive_utc(date)
     if date < datetime.datetime.utcnow():
         return 'Истекла'
@@ -51,5 +52,7 @@ def datetime_to_td_string(date: datetime.datetime):
     return ' '.join(parts) or f'0 {_MINUTES[2]}'
 
 
-def date_to_local_tz(date: datetime.datetime, tz: datetime.timedelta):
+def date_to_local_tz(date: datetime.datetime | None, tz: datetime.timedelta):
+    if date is None:
+        return None
     return date + tz

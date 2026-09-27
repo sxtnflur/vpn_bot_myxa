@@ -11,7 +11,7 @@ class AiogramPaymentMessageSender(PaymentMessageSender):
         self._bot = bot
         self._tz = tz
 
-    async def on_payment(self, telegram_id: int, expire_at: datetime.datetime) -> None:
+    async def on_payment(self, telegram_id: int, expire_at: datetime.datetime | None) -> None:
         await self._bot.send_message(
             chat_id=telegram_id,
             text=f'''

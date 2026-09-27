@@ -16,7 +16,7 @@ class SubscriptionByEmailService:
         return Subscription.from_client(
             email=email,
             sub_id=sub.client.sub_id,
-            expire_at=sub.client.expiry_time,
+            expire_at=sub.client.expire_at,
             enable=sub.client.enable,
             inbound_ids=sub.inbound_ids,
             telegram_id=sub.client.telegram_id

@@ -1,4 +1,5 @@
 import datetime
+from html import escape
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CopyTextButton
 from application.subscriptions.dto import ExpandedSubscription
@@ -12,7 +13,7 @@ def client_statistic(subs: list[ExpandedSubscription], tz: datetime.timedelta):
     now = date_to_local_tz(datetime.datetime.utcnow(), tz=tz)
     texts = []
     for i, sub in enumerate(subs, start=1):
-        inbounds = "\n".join([inbound.name for inbound in sub.inbounds])
+        inbounds = "\n".join([escape(inbound.name) for inbound in sub.inbounds])
         if inbounds:
             inbounds = '<blockquote>' + inbounds + '</blockquote>'
         else:
@@ -23,8 +24,8 @@ def client_statistic(subs: list[ExpandedSubscription], tz: datetime.timedelta):
         texts.append(
             f'''
 <b>Подписка #{i}</b>
-EMAIL: <code>{sub.email}</code>
-Ccылка: <code>{sub.links.sub_url}</code>
+EMAIL: <code>{escape(sub.email)}</code>
+Ccылка: <code>{escape(sub.links.sub_url)}</code>
 
 {inbounds}
 

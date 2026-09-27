@@ -81,7 +81,8 @@ def start_webhook():
     ).register(sub_app, path=WEBHOOK_PATH)
 
     sub_app.add_routes(create_router(payments_service=container.payments(),
-                                     rolly_pay=container.rolly_pay()))
+                                     rolly_pay=container.rolly_pay(),
+                                     accept_test=settings.test_payment))
 
     app = web.Application()
     app.add_subapp(APP_PREFIX, sub_app)

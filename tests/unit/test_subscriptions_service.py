@@ -35,7 +35,6 @@ async def test_inbounds_ids_negative_filter(inbounds_service):
 
 # ---------- комментарий клиента ----------
 
-@pytest.mark.xfail(strict=True, reason='BUG: _create_comment возвращает full_name, username теряется')
 def test_create_comment_contains_username():
     assert SubscriptionsTgBotService._create_comment('Иван', 'ivan') == 'Иван @ivan'
 
@@ -46,13 +45,11 @@ def test_create_comment_without_username():
 
 # ---------- check_if_user_has_sub ----------
 
-@pytest.mark.xfail(strict=True, reason='BUG: сравнение перевёрнуто (expiry_time < now)')
 async def test_has_sub_true_for_active(subs_service, vpn_client):
     vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(expiry=utcnow() + 10 * DAY)]
     assert await subs_service.check_if_user_has_sub(100) is True
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: сравнение перевёрнуто (expiry_time < now)')
 async def test_has_sub_false_for_expired(subs_service, vpn_client):
     vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(expiry=utcnow() - 10 * DAY)]
     assert await subs_service.check_if_user_has_sub(100) is False
@@ -136,8 +133,6 @@ async def test_legacy_client_of_same_rate_is_extended_not_duplicated(subs_servic
     assert email == '100'
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: при продлении не передаются limitIp/totalGB, '
-                                       'ClientPayload подставляет 0 — лимиты клиента сбрасываются')
 async def test_extend_keeps_client_limits(subs_service, vpn_client):
     vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(group='1', limit_ip=3, total_gb=50 * 1024 ** 3)]
 
@@ -163,7 +158,6 @@ async def test_increase_by_email_extends(subs_service, vpn_client):
     assert payload.group == '1'
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: comment не читается из клиента -> в update уходит None')
 async def test_increase_by_email_keeps_comment(subs_service, vpn_client):
     vpn_client.clients.get.return_value = make_client_obj(email='a@b.c', comment='Иван @ivan')
 
@@ -173,8 +167,6 @@ async def test_increase_by_email_keeps_comment(subs_service, vpn_client):
     assert payload.comment == 'Иван @ivan'
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='BUG: проверка "subscription is None" стоит после обращения к client_obj.client')
 async def test_increase_by_email_unknown_email(subs_service, vpn_client):
     vpn_client.clients.get.return_value = None
     with pytest.raises(IncreaseSubByEmailError):
@@ -213,14 +205,12 @@ async def test_get_subscription_links_without_clients(subs_service):
 
 # ---------- set_existing_client_rate / Client.to_client_payload ----------
 
-@pytest.mark.xfail(strict=True, reason='BUG: to_client_payload отдаёт expiryTime в секундах, 3x-ui ждёт миллисекунды')
 def test_to_client_payload_expiry_in_ms():
     expiry = utcnow() + 10 * DAY
     client = make_client_obj(expiry=expiry).client
     assert abs(client.to_client_payload().expiry_time - to_ms(expiry)) < 1000
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: опечатка limit_id= вместо limit_ip= в to_client_payload')
 def test_to_client_payload_keeps_limit_ip():
     client = make_client_obj(limit_ip=3).client
     assert client.to_client_payload().limit_ip == 3
@@ -235,3 +225,80 @@ async def test_set_existing_client_rate_moves_inbounds(subs_service, vpn_client)
     vpn_client.clients.bulk_detach.assert_awaited_once_with(emails=['100'], inbound_ids=[1, 2])
     _, payload = _last_update_payload(vpn_client)
     assert payload.group == '2'
+
+
+async def test_extend_keeps_uuid_sub_id_and_reenables(subs_service, vpn_client):
+    client_obj = make_client_obj(email='100', group='1', enable=False, expiry=utcnow() - DAY)
+    vpn_client.clients.get_by_tg_id.return_value = [client_obj]
+
+    await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=1)
+
+    _, payload = _last_update_payload(vpn_client)
+    assert payload.uuid == str(client_obj.client.uuid)
+    assert payload.sub_id == client_obj.client.sub_id
+    assert payload.enable is True
+
+
+async def test_increase_by_email_keeps_limits(subs_service, vpn_client):
+    vpn_client.clients.get.return_value = make_client_obj(email='a@b.c', limit_ip=2, total_gb=10 * 1024 ** 3)
+
+    await subs_service.increase_subscription_by_email('a@b.c', expire_in=30 * DAY)
+
+    _, payload = _last_update_payload(vpn_client)
+    assert payload.limit_ip == 2
+    assert payload.total_gb == 10 * 1024 ** 3
+
+
+# ---------- бессрочные клиенты и отложенный старт ----------
+
+def test_client_expire_at_variants():
+    assert make_client_obj(expiry=0).client.expire_at is None
+    delayed = make_client_obj(expiry=-30 * 86_400_000).client.expire_at
+    assert abs((delayed - utcnow()) - 30 * DAY) < datetime.timedelta(seconds=5)
+    fixed = utcnow() + 3 * DAY
+    assert abs(make_client_obj(expiry=fixed).client.expire_at - fixed) < datetime.timedelta(milliseconds=1)
+
+
+async def test_has_sub_true_for_unlimited(subs_service, vpn_client):
+    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(expiry=0)]
+    assert await subs_service.check_if_user_has_sub(100) is True
+
+
+async def test_unlimited_client_stays_unlimited_on_payment(subs_service, vpn_client):
+    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(group='1', expiry=0)]
+
+    result = await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=1)
+
+    assert result.created is False
+    assert result.expire_at is None
+    _, payload = _last_update_payload(vpn_client)
+    assert payload.expiry_time == 0
+
+
+async def test_unlimited_client_by_email_stays_unlimited(subs_service, vpn_client):
+    vpn_client.clients.get.return_value = make_client_obj(email='a@b.c', expiry=0)
+
+    assert await subs_service.increase_subscription_by_email('a@b.c', expire_in=30 * DAY) is None
+    _, payload = _last_update_payload(vpn_client)
+    assert payload.expiry_time == 0
+
+
+async def test_delayed_start_client_gets_longer_duration(subs_service, vpn_client):
+    ten_days_ms = 10 * 86_400_000
+    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(group='1', expiry=-ten_days_ms)]
+
+    result = await subs_service.add_subscription(telegram_id=100, full_name='Иван', username='ivan', rate_id=1)
+
+    _, payload = _last_update_payload(vpn_client)
+    assert payload.expiry_time == -(ten_days_ms + 30 * 86_400_000)  # отсчёт всё ещё с первого подключения
+    assert abs((result.expire_at - utcnow()) - 40 * DAY) < datetime.timedelta(seconds=5)
+
+
+async def test_profile_shows_unlimited(subs_service, vpn_client):
+    from presentation.bot.statistic.screens import client_statistic
+    vpn_client.clients.get_by_tg_id.return_value = [make_client_obj(expiry=0)]
+
+    subs = await subs_service.get_user_subscriptions(100)
+
+    assert subs[0].expire_at is None
+    assert 'Дата окончания: ♾ Бессрочно' in client_statistic(subs, tz=datetime.timedelta(hours=3)).text

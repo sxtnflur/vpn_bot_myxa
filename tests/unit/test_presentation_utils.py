@@ -28,8 +28,8 @@ def test_td_string_past_is_zero():
     assert datetime_to_td_string(datetime.datetime.utcnow() - datetime.timedelta(days=1)) == '0 Минут'
 
 
-def test_sub_end_expired_and_none():
-    assert sub_end_to_string(None) == 'Истекла'
+def test_sub_end_expired_and_unlimited():
+    assert sub_end_to_string(None) == '♾ Бессрочно'
     assert sub_end_to_string(datetime.datetime.utcnow() - datetime.timedelta(seconds=1)) == 'Истекла'
 
 
@@ -74,8 +74,6 @@ def test_statistic_remaining_time_not_shifted_by_tz():
     assert '(10 Дней)' in text
 
 
-@pytest.mark.xfail(strict=True, reason='BUG: first_name подставляется в HTML без экранирования '
-                                       '(имя "<3" ломает отправку сообщения)')
 def test_start_screen_escapes_name():
     text = start_screens.start('Вася <3', privacy_policy_link='https://p', user_agreement_link='https://u').text
     assert 'Вася &lt;3' in text
