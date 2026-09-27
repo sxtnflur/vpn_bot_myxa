@@ -40,6 +40,10 @@ def create_router(payments_service: PaymentsService,
             logging.error('RollyPay: оплата %s без metadata', data.payment_id)
             return web.Response(text='No metadata', status=200)
 
+        if data.status in ('created', 'processing', 'chargeback', 'refunded'):
+            logging.warning(f'Ignored status: {data.status}')
+            return web.Response(text='Ignored Status', status=200)
+
         logging.info(f'Новый платеж: {data}')
 
         await payments_service.on_payment_webhook(
